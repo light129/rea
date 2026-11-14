@@ -75,6 +75,7 @@ test("keeps each Kuna no-pseudocode observation's limitations on its batch item"
       parseEvidence(
         (await call("procedure_pseudo_code", { procedure })).structuredContent,
       );
+    const mainDirect = await direct("main");
     const broken = await direct("broken");
     const importSlot = await direct("puts");
     expect(broken.normalized_result).toBeNull();
@@ -136,7 +137,11 @@ test("keeps each Kuna no-pseudocode observation's limitations on its batch item"
     expect(result).toMatchObject({ total: 4, succeeded: 1, failed: 3 });
     const [main, failed, imported, unknown] = result.items;
     expect(main).toMatchObject({ address: "main", status: "ok" });
-    expect(main).not.toHaveProperty("limitations");
+    // A successful item keeps its own observation's caveats too, so a
+    // repeated selector answered differently stays distinguishable.
+    if (mainDirect.limitations.length === 0)
+      expect(main).not.toHaveProperty("limitations");
+    else expect(main).toMatchObject({ limitations: mainDirect.limitations });
     const noPseudocode = {
       status: "unavailable",
       reason: "no_pseudocode",
@@ -147,12 +152,14 @@ test("keeps each Kuna no-pseudocode observation's limitations on its batch item"
       address: "broken",
       procedure: { status: "resolved", address: "0x1080", name: "broken" },
       ...noPseudocode,
+      pseudocode_absence: { kind: "provider-failure" },
       limitations: broken.limitations,
     });
     expect(imported).toMatchObject({
       address: "puts",
       procedure: { status: "resolved", address: "0x2000" },
       ...noPseudocode,
+      pseudocode_absence: { kind: "not-in-export" },
       limitations: importSlot.limitations,
     });
     expect(imported).not.toEqual(
